@@ -159,37 +159,37 @@ kernel void add_chunk_sum(global int * a,
   }
 }
 
-kernel void
-scan_inclusive(global int* data,
-                   global int* result,
-                   local  int* buffer,
-                   int size,
-                   int buffer_size) {
-    // TODO: Implement OpenCL version.
+kernel void scan_inclusive(global float * a,
+                           global float * chunk_sums,
+                           local float * b,
+                           int current_size, // текущий размер массива (так как мы рекурсивно меняем размер сканского массива)
+                           int group_size // размер группы
+                           ) {
     int local_id = get_local_id(0); // номер потока в группе
-    int group_id = get_group_id(0);
     int global_id = get_global_id(0);
-    if (global_id < size)
-        buffer[local_id] = data[global_id];
-    else
-        buffer[local_id] = 0;
+    int group_id = get_group_id(0);
+
+    if (global_id < current_size){
+        b[local_id] = a[global_id];
+    }
+    else {
+        b[local_id] = 0.f;
+    }
     barrier(CLK_LOCAL_MEM_FENCE);
-    for(int offset=1; offset<buffer_size; offset *= 2) {
-        int sum = 0;
-        if (global_id < size && local_id >= offset) {
-            sum += buffer[local_id - offset];
-            buffer[local_id] += sum;
+    for (int offset = 1; offset < group_size; offset *= 2) {
+        if (local_id >= offset && global_id < current_size) {
+            b[local_id] += b[local_id - offset];
         }
         barrier(CLK_LOCAL_MEM_FENCE);
     }
     barrier(CLK_LOCAL_MEM_FENCE);
-    if (global_id < size) {
-        data[global_id] = buffer[local_id];
+    //сохраняю групповую сумму для дальнейших действий
+    if (global_id < current_size) {
+        a[global_id] = b[local_id];
     }
-
-    if (local_id == 0) {
-        //printf("%.3f val\n %d group_id\n%d size\n%d buffer_size\n\n", buffer[0], group_id, size, buffer_size);
-        result[group_id] = buffer[buffer_size-1];
+    //сохраняю сумму
+    if (local_id == group_size - 1) {
+        chunk_sums[group_id] = b[group_size-1];
     }
     barrier(CLK_GLOBAL_MEM_FENCE);
 }
@@ -204,6 +204,7 @@ kernel void is_positive(
     else { result[i] = 0; }
 }
 
+//этот ок!
 kernel void scatter(
     global float * a,
     global int * mask,
