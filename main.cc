@@ -63,7 +63,7 @@ struct OpenCL {
 
 void profile_filter(int n, OpenCL& opencl) {
     auto input = random_std_vector<float>(n);
-    std::vector<float> result, expected_result;
+    std::vector<float> result, expected_result; //if (n), raises wrong size!
     result.reserve(n);
     cl::Kernel scan(opencl.program, "scan_inclusive");
     cl::Kernel collect_scans(opencl.program, "add_chunk_sum");
@@ -74,7 +74,7 @@ void profile_filter(int n, OpenCL& opencl) {
     auto t0 = clock_type::now();
     filter(input, expected_result, [] (float x) { return x > 0; }); // filter positive numbers
     auto t1 = clock_type::now();
-    int group_size = 16;
+    int group_size = 64;
     int scan_num = 0;
     cl::Buffer d_input(opencl.queue, begin(input), end(input), true);
     cl::Buffer d_mask(opencl.context, CL_MEM_READ_WRITE, (n+group_size) * sizeof(int));
@@ -105,16 +105,15 @@ void profile_filter(int n, OpenCL& opencl) {
         opencl.queue.flush();
     }
 
-    for (int i = scan_num - 1; i > 0; i-=1) {
+    for (int i = scan_num - 1; i > 0; i -= 1) {
         collect_scans.setArg(0, scans[i-1]);
         collect_scans.setArg(1, scans[i]);
         collect_scans.setArg(2, scan_sizes[i-1]);
         collect_scans.setArg(3, group_size);
-        opencl.queue.enqueueNDRangeKernel(
-                collect_scans,
-                cl::NullRange,
-                cl::NDRange(((scan_sizes[i-1]+group_size-1)/group_size)*group_size),
-                cl::NDRange(group_size)
+        opencl.queue.enqueueNDRangeKernel(collect_scans,
+                                          cl::NullRange,
+                                          cl::NDRange(((scan_sizes[i-1]+group_size-1)/group_size)*group_size),
+                                          cl::NDRange(group_size)
         );
     }
 
@@ -124,19 +123,14 @@ void profile_filter(int n, OpenCL& opencl) {
     scatter.setArg(1, scans[0]);
     scatter.setArg(2, d_result);
 
-    opencl.queue.enqueueNDRangeKernel(
-            scatter,
-            cl::NullRange,
-            cl::NDRange(n-1),
-            cl::NullRange
-    );
+    opencl.queue.enqueueNDRangeKernel(scatter,cl::NullRange,cl::NDRange(n-1),cl::NullRange);
     opencl.queue.flush();
 
     auto t3 = clock_type::now();
     opencl.queue.enqueueReadBuffer(scans[0], true, 0, final_masks.size()*sizeof(int), final_masks.data());
     int size = final_masks.back();
     result.resize(size);
-    opencl.queue.enqueueReadBuffer(d_result, true, 0, n*sizeof(float), result.data());
+    opencl.queue.enqueueReadBuffer(d_result, true, 0, n * sizeof(float), result.data());
     opencl.queue.flush();
 
     auto t4 = clock_type::now();
@@ -145,7 +139,7 @@ void profile_filter(int n, OpenCL& opencl) {
 }
 
 const std::string src = R"(
-///этот ок!
+
 kernel void add_chunk_sum(global int * a,
                           global int * chunk_sums,
                           int current_size,
