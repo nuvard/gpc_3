@@ -158,7 +158,7 @@ kernel void map_positive(
     global int * result
     ) {
     int i = get_global_id(0);
-    if (data[i] > 0) { result[i] = 1;}
+    if (a[i] > 0) { result[i] = 1;}
     else result[i] = 0;
 }
 
