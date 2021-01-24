@@ -64,16 +64,89 @@ struct OpenCL {
 void profile_filter(int n) {
     auto input = random_std_vector<float>(n);
     std::vector<float> result, expected_result(n);
-    result.reserve(n);
+    //expected_result.reserve(n);
+
+    cl::Kernel scan(opencl.program, "scan_inclusive");
+    cl::Kernel kernel_map(opencl.program, "add_chunk_sum");
+    cl::Kernel map(opencl.program, "map_positive");
+    cl::Kernel pack(opencl.program, "pack");
+
+    int group_size = 64;
+    int iter_num = 0;
+
+    std::vector<cl::Buffer> scans;
+    std::vector<int> scan_sizes;
+
     auto t0 = clock_type::now();
-    filter(input, result, [] (float x) { return x > 0; }); // filter positive numbers
+    filter(input, expected_result, [] (float x) { return x > 0; }); // filter positive numbers
     auto t1 = clock_type::now();
+    cl::Buffer d_input(opencl.queue, begin(input), end(input), true);
+    cl::Buffer d_mask(opencl.context, CL_MEM_READ_WRITE, (n+group_size)*sizeof(int)); // n+group_size чтобы сработал первый цикл сканса
     auto t2 = clock_type::now();
+    //первое - просто строим маску позитивности
+    map.setArg(0, d_input);
+    map.setArg(1, d_mask);
+    opencl.queue.enqueueNDRangeKernel(
+            map,
+            cl::NullRange,
+            cl::NDRange(n),
+            cl::NullRange
+    );
+    scans.push_back(mask);
+    //для маски делаем скан (как во второй лабе - копипаста)
+    for (int scan_size = n; scan_size > 1; scan_size = (scan_size + group_size - 1) / group_size) {
+        scan_sizes.push_back(scan_size);
+        iter_num++;
+        scans.push_back(cl::Buffer(opencl.context, CL_MEM_READ_WRITE, (scan_size+group_size)*sizeof(float)));
+        kernel_scan.setArg(0, scans[iter_num-1]);
+        kernel_scan.setArg(1, cl::Local(group_size*sizeof(float)));
+        kernel_scan.setArg(2, scans[iter_num]);
+        kernel_scan.setArg(3, scan_size);
+        kernel_scan.setArg(4, group_size);
+        opencl.queue.enqueueNDRangeKernel(
+                kernel_scan,
+                cl::NullRange,
+                cl::NDRange(((scan_size + group_size - 1)/ group_size) * group_size),
+                cl::NDRange(group_size));
+        opencl.queue.flush();
+    }
+
+    for (int i = iter_num - 1; i > 0; i -= 1) {
+        kernel_map.setArg(0, scans[i-1]);
+        kernel_map.setArg(1, scans[i]);
+        kernel_map.setArg(2, scan_sizes[i-1]);
+        kernel_map.setArg(3, group_size);
+        opencl.queue.enqueueNDRangeKernel(
+                kernel_map,
+                cl::NullRange,
+                cl::NDRange(((scan_sizes[i-1] + group_size - 1) / group_size) * group_size),
+                cl::NDRange(group_size)
+        );
+    }
+
+    //собираем результаты
+    cl::Buffer d_result(opencl.context, CL_MEM_READ_WRITE, (n)*sizeof(int));
+    std::vector<int> final_masks(n);
+    pack.setArg(0, d_input);
+    pack.setArg(1, scans[0]);
+    pack.setArg(2, d_result);
+
+    opencl.queue.enqueueNDRangeKernel(
+            pack,
+            cl::NullRange,
+            cl::NDRange(n-1), // так как мы используем i+1
+            cl::NullRange
+    );
+    opencl.queue.flush();
+
     auto t3 = clock_type::now();
+    opencl.queue.enqueueReadBuffer(scans[0], true, 0, final_masks.size()*sizeof(int), final_masks.data());
+    int size = final_masks.size();
+    result.resize(size);
+    opencl.queue.enqueueReadBuffer(d_result, true, 0, n*sizeof(float), result.data());
+    opencl.queue.flush();
     auto t4 = clock_type::now();
-    // TODO Implement OpenCL version! See profile_vector_times_vector for an example.
-    // TODO Uncomment the following line!
-    //verify_vector(expected_result, result);
+    verify_vector(expected_result, result);
     print("filter", {t1-t0,t4-t1,t2-t1,t3-t2,t4-t3});
 }
 
@@ -84,8 +157,74 @@ void opencl_main(OpenCL& opencl) {
 }
 
 const std::string src = R"(
-// TODO: Create OpenCL kernels.
+kernel void add_chunk_sum(global float * a,
+                          global float * chunk_sums,
+                          int current_size,
+                          int group_size
+                          ) {
+  const int global_id = get_global_id(0);
+  const int group_id = get_group_id(0);
+if (global_id >= group_size && global_id < current_size){ //необходимо оставить первую группу как есть
+      a[global_id] += chunk_sums[group_id-1];
+  }
+}
+
+kernel void map_positive(
+    global float * a,
+    global int * result
+    ) {
+    int i = get_global_id(0);
+    if (data[i] > 0) { result[i] = 1;}
+    else result[i] = 0;
+}
+
+kernel void pack(
+    global float * a,
+    global int * mask,
+    global float* result
+    ) {
+    int i = get_global_id(0);
+    if (mask[i] < mask[i+1]) {
+        result[mask[i]] = a[i+1];
+    }
+}
+
+kernel void scan_inclusive(global float * a,
+                           local float * b,
+                           global float * chunk_sums,
+                           int current_size, // текущий размер массива (так как мы рекурсивно меняем размер сканского массива)
+                           int group_size // размер группы
+                           ) {
+    int local_id = get_local_id(0); // номер потока в группе
+    int global_id = get_global_id(0);
+    int group_id = get_group_id(0);
+
+    if (global_id < current_size){
+        b[local_id] = a[global_id];
+    }
+    else {
+        b[local_id] = 0.f;
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int offset = 1; offset < group_size; offset *= 2) {
+        if (local_id >= offset && global_id < current_size) {
+            b[local_id] += b[local_id - offset];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+    //сохраняю групповую сумму для дальнейших действий
+    if (global_id < current_size) {
+        a[global_id] = b[local_id];
+    }
+    //сохраняю сумму
+    if (local_id == group_size - 1) {
+        chunk_sums[group_id] = b[group_size-1];
+    }
+    barrier(CLK_GLOBAL_MEM_FENCE);
+}
 )";
+
 
 int main() {
     try {
