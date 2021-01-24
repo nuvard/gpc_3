@@ -89,11 +89,11 @@ void profile_filter(int n, OpenCL& opencl) {
     );
     scans.push_back(d_mask);
     for (int size = n; size > 1; size = (size+ group_size - 1)/ group_size) {
+        scan.setArg(0, scans[scan_num]);
         scan_num++;
         scans.push_back(cl::Buffer(opencl.context, CL_MEM_READ_WRITE, (size + group_size)*sizeof(int)));
         scan_sizes.push_back(size);
         //if (size < buffer_size) buffer_size = size;
-        scan.setArg(0, scans[scan_num-1]);
         scan.setArg(1, cl::Local(group_size*sizeof(int)));
         scan.setArg(2, scans[scan_num]);
         scan.setArg(3, size);
@@ -101,7 +101,7 @@ void profile_filter(int n, OpenCL& opencl) {
         opencl.queue.enqueueNDRangeKernel(
                 scan,
                 cl::NullRange,
-                cl::NDRange(((size+ group_size - 1)/ group_size) * group_size),
+                cl::NDRange(((size + group_size - 1)/ group_size) * group_size),
                 cl::NDRange(group_size));
         opencl.queue.flush();
     }
@@ -114,7 +114,7 @@ void profile_filter(int n, OpenCL& opencl) {
         opencl.queue.enqueueNDRangeKernel(
                 collect_scans,
                 cl::NullRange,
-                cl::NDRange(((scan_sizes[i-1]+ group_size - 1)/ group_size)*group_size),
+                cl::NDRange(((scan_sizes[i-1]+ group_size - 1)/ group_size) * group_size),
                 cl::NDRange(group_size)
         );
     }
