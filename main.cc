@@ -93,9 +93,9 @@ void profile_filter(int n, OpenCL& opencl) {
     for (int scan_size = n; scan_size > 1; scan_size = (scan_size + group_size - 1) / group_size) {
         scan_sizes.push_back(scan_size);
         iter_num++;
-        scans.push_back(cl::Buffer(opencl.context, CL_MEM_READ_WRITE, (scan_size+group_size)*sizeof(float)));
+        scans.push_back(cl::Buffer(opencl.context, CL_MEM_READ_WRITE, (scan_size+group_size)*sizeof(int)));
         kernel_scan.setArg(0, scans[iter_num-1]);
-        kernel_scan.setArg(1, cl::Local(group_size*sizeof(float)));
+        kernel_scan.setArg(1, cl::Local(group_size*sizeof(int)));
         kernel_scan.setArg(2, scans[iter_num]);
         kernel_scan.setArg(3, scan_size);
         kernel_scan.setArg(4, group_size);
