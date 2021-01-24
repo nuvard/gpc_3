@@ -119,7 +119,7 @@ void profile_filter(int n, OpenCL& opencl) {
         );
     }
 
-    cl::Buffer d_result(opencl.context, CL_MEM_READ_WRITE, (n)*sizeof(int));
+    cl::Buffer d_result(opencl.context, CL_MEM_READ_WRITE, (n)*sizeof(float));
     std::vector<int> final_masks(n);
     scatter.setArg(0, d_input);
     scatter.setArg(1, scans[0]);
