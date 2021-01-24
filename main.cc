@@ -65,10 +65,10 @@ void profile_filter(int n, OpenCL& opencl) {
     auto input = random_std_vector<float>(n);
     std::vector<float> result, expected_result;
     result.reserve(n);
-    //printf("initial size is: %i \n", n);
+    printf("initial size is: %i \n", n);
+    cl::Kernel kernel_map(opencl.program, "map_positive");
     cl::Kernel kernel_scan(opencl.program, "scan_inclusive");
     cl::Kernel kernel_sum(opencl.program, "add_chunk_sum");
-    cl::Kernel kernel_map(opencl.program, "map_positive");
     cl::Kernel kernel_pack(opencl.program, "pack");
 
     int group_size = 64;
@@ -79,7 +79,7 @@ void profile_filter(int n, OpenCL& opencl) {
 
     auto t0 = clock_type::now();
     filter(input, expected_result, [] (float x) { return x > 0; }); // filter positive numbers
-    //printf("filtered %i items \n", expected_result);
+    printf("filtered %i items \n", expected_result.size());
     auto t1 = clock_type::now();
     cl::Buffer d_input(opencl.queue, begin(input), end(input), true);
     cl::Buffer d_mask(opencl.context, CL_MEM_READ_WRITE, (n + group_size)*sizeof(int)); // n+group_size чтобы сработал первый цикл сканса
@@ -87,6 +87,7 @@ void profile_filter(int n, OpenCL& opencl) {
     //первое - просто строим маску позитивности
     kernel_map.setArg(0, d_input);
     kernel_map.setArg(1, d_mask);
+
     opencl.queue.enqueueNDRangeKernel(kernel_map,cl::NullRange,cl::NDRange(n),cl::NullRange);
     scans.push_back(d_mask);
     //для маски делаем скан (как во второй лабе - копипаста)
@@ -133,9 +134,11 @@ void profile_filter(int n, OpenCL& opencl) {
     auto t3 = clock_type::now();
     opencl.queue.enqueueReadBuffer(scans[0], true, 0, final_masks.size()*sizeof(int), final_masks.data());
     int size = final_masks.back();
+    print("After masking: %i\n", size);
     result.resize(size);
     opencl.queue.enqueueReadBuffer(d_result, true, 0, n*sizeof(float), result.data());
     opencl.queue.flush();
+    print("My result after masking: %i\n", result.size());
     auto t4 = clock_type::now();
     verify_vector(expected_result, result);
     print("filter", {t1-t0,t4-t1,t2-t1,t3-t2,t4-t3});
@@ -147,9 +150,9 @@ kernel void add_chunk_sum(global float * a,
                           int current_size,
                           int group_size
                           ) {
-  const int global_id = get_global_id(0);
-  const int group_id = get_group_id(0);
-if (global_id >= group_size && global_id < current_size){ //необходимо оставить первую группу как есть
+  int global_id = get_global_id(0);
+  int group_id = get_group_id(0);
+  if (global_id >= group_size && global_id < current_size){ //необходимо оставить первую группу как есть
       a[global_id] += chunk_sums[group_id-1];
   }
 }
@@ -159,14 +162,13 @@ kernel void map_positive(
     global int * result
     ) {
     int i = get_global_id(0);
-    if (a[i] > 0) { result[i] = 1;}
-    else result[i] = 0;
+    result[i] = a[i] > 0 ? 1 : 0;
 }
 
 kernel void pack(
     global float * a,
     global int * mask,
-    global float* result
+    global float * result
     ) {
     int i = get_global_id(0);
     if (mask[i] < mask[i+1]) {
