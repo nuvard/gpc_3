@@ -134,7 +134,7 @@ void profile_filter(int n, OpenCL& opencl) {
     opencl.queue.enqueueReadBuffer(scans[0], true, 0, final_masks.size()*sizeof(int), final_masks.data());
 
     int size = final_masks.back(); //последний элемент - должен давать количестыо чисел больше нуля
-    print("After masking: %i\n", size);
+    //print("After masking: %i\n", size);
     result.resize(size);
     opencl.queue.enqueueReadBuffer(d_result, true, 0, n*sizeof(float), result.data());
     opencl.queue.flush();
