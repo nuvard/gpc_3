@@ -66,7 +66,7 @@ void profile_filter(int n, OpenCL& opencl) {
     std::vector<float> result, expected_result;
     result.reserve(n);
     cl::Kernel scan(opencl.program, "scan_inclusive");
-    cl::Kernel scan_final(opencl.program, "scan_final");
+    cl::Kernel scan_final(opencl.program, "add_chunk_sum");
     cl::Kernel map(opencl.program, "map_more_zero");
     cl::Kernel scatter(opencl.program, "scatter");
     std::vector<cl::Buffer> buffers;
@@ -103,7 +103,7 @@ void profile_filter(int n, OpenCL& opencl) {
                 scan,
                 cl::NullRange,
                 cl::NDRange(((size+ buffer_size - 1)/ buffer_size) * buffer_size),
-                cl::NDRange(buffer_size) );
+                cl::NDRange(buffer_size));
         opencl.queue.flush();
     }
 
@@ -147,19 +147,16 @@ void profile_filter(int n, OpenCL& opencl) {
 }
 
 const std::string src = R"(
-kernel void
-scan_final(
-    global int* data,
-    global int* scan,
-    int size,
-    int buffer_size
-) {
-    int gid = get_global_id(0);
-    int grid = get_group_id(0);
 
-    if (gid >= buffer_size && gid < size){
-        data[gid] += scan[grid-1];
-    }
+kernel void add_chunk_sum(global int * a,
+                          global int * chunk_sums,
+                          int current_size,
+                          int group_size) {
+  int global_id = get_global_id(0);
+  int group_id = get_group_id(0);
+  if (global_id >= group_size && global_id < current_size){ //необходимо оставить первую группу как есть
+      a[global_id] += chunk_sums[group_id-1];
+  }
 }
 
 kernel void
