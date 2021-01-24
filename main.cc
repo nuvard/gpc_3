@@ -194,6 +194,7 @@ scan_inclusive(global int* data,
     barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
+//этот ок!
 kernel void is_positive(
     global float * a,
     global int * result
@@ -203,15 +204,14 @@ kernel void is_positive(
     else { result[i] = 0; }
 }
 
-kernel void
-scatter(
-    global float* data,
-    global int* mask,
-    global float* result
+kernel void scatter(
+    global float * a,
+    global int * mask,
+    global float * result
 ) {
     int i = get_global_id(0);
     if (mask[i] < mask[i+1]) {
-        result[mask[i]] = data[i+1];
+        result[mask[i]] = a[i+1];
     }
 }
 )";
