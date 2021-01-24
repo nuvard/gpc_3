@@ -65,7 +65,7 @@ void profile_filter(int n, OpenCL& opencl) {
     auto input = random_std_vector<float>(n);
     std::vector<float> result, expected_result;
     result.reserve(n);
-    printf("initial size is: %i \n", n);
+    //printf("initial size is: %i \n", n);
     cl::Kernel kernel_scan(opencl.program, "scan_inclusive");
     cl::Kernel kernel_sum(opencl.program, "add_chunk_sum");
     cl::Kernel kernel_map(opencl.program, "map_positive");
@@ -79,7 +79,7 @@ void profile_filter(int n, OpenCL& opencl) {
 
     auto t0 = clock_type::now();
     filter(input, expected_result, [] (float x) { return x > 0; }); // filter positive numbers
-    printf("filtered %i items \n", expected_result);
+    //printf("filtered %i items \n", expected_result);
     auto t1 = clock_type::now();
     cl::Buffer d_input(opencl.queue, begin(input), end(input), true);
     cl::Buffer d_mask(opencl.context, CL_MEM_READ_WRITE, (n + group_size)*sizeof(int)); // n+group_size чтобы сработал первый цикл сканса
