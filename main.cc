@@ -144,34 +144,37 @@ void profile_filter(int n, OpenCL& opencl) {
 }
 
 const std::string src = R"(
-kernel void add_chunk_sum(global float * a,
-                          global float * chunk_sums,
-                          int current_size,
-                          int group_size
-                          ) {
-  int global_id = get_global_id(0);
-  int group_id = get_group_id(0);
-  if (global_id >= group_size && global_id < current_size){ //необходимо оставить первую группу как есть
-      a[global_id] += chunk_sums[group_id-1];
-  }
+
+kernel void add_chunk_sum(
+    global int* data,
+    global int* scan,
+    int size,
+    int buffer_size
+) {
+    int gid = get_global_id(0);
+    int grid = get_group_id(0);
+
+    if (gid >= buffer_size && gid < size){
+        data[gid] += scan[grid-1];
+    }
 }
 
 kernel void map_positive(
-    global float * a,
-    global int * result
-    ) {
+    global float* data,
+    global int* result
+) {
     int i = get_global_id(0);
-    result[i] = a[i] > 0 ? 1 : 0;
+    result[i] = data[i] > 0 ? 1 : 0;
 }
 
 kernel void pack(
-    global float * a,
-    global int * mask,
-    global float * result
-    ) {
+    global float* data,
+    global int* mask,
+    global float* result
+) {
     int i = get_global_id(0);
     if (mask[i] < mask[i+1]) {
-        result[mask[i]] = a[i+1];
+        result[mask[i]] = data[i+1];
     }
 }
 
