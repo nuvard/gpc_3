@@ -67,7 +67,7 @@ void profile_filter(int n, OpenCL& opencl) {
     result.reserve(n);
     cl::Kernel scan(opencl.program, "scan_inclusive");
     cl::Kernel scan_final(opencl.program, "add_chunk_sum");
-    cl::Kernel map(opencl.program, "map_more_zero");
+    cl::Kernel map(opencl.program, "is_positive");
     cl::Kernel scatter(opencl.program, "scatter");
     std::vector<cl::Buffer> buffers;
     std::vector<int> buffer_sizes;
@@ -195,15 +195,12 @@ scan_inclusive(global int* data,
 }
 
 kernel void is_positive(
-    global float* a,
-    global int * result //так как дальше в маску
+    global float * a,
+    global int * result
 ) {
     int i = get_global_id(0);
-    if (a[i] > 0) {
-        result[i] = 1;
-    }
-    else result[i]= 0;
-   // result[i] = data[i] > 0 ? 1 : 0;
+    if (a[i] > 0) { result[i] = 1; }
+    else { result[i] = 0; }
 }
 
 kernel void
