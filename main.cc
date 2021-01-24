@@ -175,7 +175,7 @@ kernel void pack(
     }
 }
 
-scan_inclusive(global int * data,
+kernel void scan_inclusive(global int * data,
                    local int * buffer,
                    global int * result,
                    int size,
