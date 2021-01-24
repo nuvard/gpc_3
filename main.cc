@@ -79,7 +79,6 @@ void profile_filter(int n, OpenCL& opencl) {
 
     auto t0 = clock_type::now();
     filter(input, expected_result, [] (float x) { return x > 0; }); // filter positive numbers
-    printf("filtered %i items \n", expected_result.size());
     auto t1 = clock_type::now();
     cl::Buffer d_input(opencl.queue, begin(input), end(input), true);
     cl::Buffer d_mask(opencl.context, CL_MEM_READ_WRITE, (n + group_size)*sizeof(int)); // n+group_size чтобы сработал первый цикл сканса
@@ -139,7 +138,6 @@ void profile_filter(int n, OpenCL& opencl) {
     result.resize(size);
     opencl.queue.enqueueReadBuffer(d_result, true, 0, n*sizeof(float), result.data());
     opencl.queue.flush();
-    print("My result after masking: %i\n", result.size());
     auto t4 = clock_type::now();
     verify_vector(expected_result, result);
     print("filter", {t1-t0,t4-t1,t2-t1,t3-t2,t4-t3});
