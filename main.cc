@@ -89,11 +89,11 @@ void profile_filter(int n, OpenCL& opencl) {
     );
     scans.push_back(d_mask);
     for (int size = n; size > 1; size = (size+ group_size - 1)/ group_size) {
-        scan.setArg(0, scans[scan_num]);
         scan_num++;
-        scans.emplace_back(opencl.context, CL_MEM_READ_WRITE, (size + group_size)*sizeof(int));
+        scans.push_back(cl::Buffer(opencl.context, CL_MEM_READ_WRITE, (size + group_size)*sizeof(int)));
         scan_sizes.push_back(size);
         //if (size < buffer_size) buffer_size = size;
+        scan.setArg(0, scans[scan_num-1]);
         scan.setArg(1, cl::Local(group_size*sizeof(int)));
         scan.setArg(2, scans[scan_num]);
         scan.setArg(3, size);
@@ -119,11 +119,11 @@ void profile_filter(int n, OpenCL& opencl) {
         );
     }
 
-    cl::Buffer resultbuffer(opencl.context, CL_MEM_READ_WRITE, (n)*sizeof(int));
+    cl::Buffer d_result(opencl.context, CL_MEM_READ_WRITE, (n)*sizeof(int));
     std::vector<int> final_masks(n);
     scatter.setArg(0, d_input);
     scatter.setArg(1, scans[0]);
-    scatter.setArg(2, resultbuffer);
+    scatter.setArg(2, d_result);
 
     opencl.queue.enqueueNDRangeKernel(
             scatter,
@@ -137,7 +137,7 @@ void profile_filter(int n, OpenCL& opencl) {
     opencl.queue.enqueueReadBuffer(scans[0], true, 0, final_masks.size()*sizeof(int), final_masks.data());
     int size = final_masks.back();
     result.resize(size);
-    opencl.queue.enqueueReadBuffer(resultbuffer, true, 0, n*sizeof(float), result.data());
+    opencl.queue.enqueueReadBuffer(d_result, true, 0, n*sizeof(float), result.data());
     opencl.queue.flush();
 
     auto t4 = clock_type::now();
