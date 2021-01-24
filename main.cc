@@ -63,6 +63,7 @@ struct OpenCL {
 
 void profile_filter(int n, OpenCL& opencl) {
     auto input = random_std_vector<float>(n);
+    printf("first element in input is: %f \n", input[0]);
     std::vector<float> result, expected_result; //if (n), raises wrong size!
     result.reserve(n);
     cl::Kernel scan(opencl.program, "scan_inclusive");
