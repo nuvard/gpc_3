@@ -80,7 +80,7 @@ void profile_filter(int n, OpenCL& opencl) {
     auto t1 = clock_type::now();
 
     cl::Buffer d_input(opencl.queue, begin(input), end(input), true);
-    cl::Buffer d_mask(opencl.context, CL_MEM_READ_WRITE, (n)*sizeof(int));
+    cl::Buffer d_mask(opencl.context, CL_MEM_READ_WRITE, (n  + group_size )*sizeof(int));
     auto t2 = clock_type::now();
     kernel_map.setArg(0, d_input);
     kernel_map.setArg(1, d_mask);
@@ -90,7 +90,7 @@ void profile_filter(int n, OpenCL& opencl) {
     scans.push_back(d_mask);
     for (int scan_size = n; scan_size > 1; scan_size = (scan_size + group_size - 1)/ group_size) {
         scan_num++;
-        scans.push_back(cl::Buffer(opencl.context, CL_MEM_READ_WRITE, (scan_size)*sizeof(int)));
+        scans.push_back(cl::Buffer(opencl.context, CL_MEM_READ_WRITE, (scan_size  + group_size)*sizeof(int)));
         scan_sizes.push_back(scan_size);
         kernel_scan.setArg(0, scans[scan_num-1]);
         kernel_scan.setArg(1, cl::Local(group_size*sizeof(int)));
