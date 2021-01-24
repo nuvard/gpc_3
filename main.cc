@@ -61,7 +61,7 @@ struct OpenCL {
     cl::CommandQueue queue;
 };
 
-void profile_filter(int n) {
+void profile_filter(int n, OpenCL& opencl) {
     auto input = random_std_vector<float>(n);
     std::vector<float> result, expected_result(n);
     //expected_result.reserve(n);
@@ -150,12 +150,6 @@ void profile_filter(int n) {
     print("filter", {t1-t0,t4-t1,t2-t1,t3-t2,t4-t3});
 }
 
-void opencl_main(OpenCL& opencl) {
-    using namespace std::chrono;
-    print_column_names();
-    profile_filter(1024*1024);
-}
-
 const std::string src = R"(
 kernel void add_chunk_sum(global float * a,
                           global float * chunk_sums,
@@ -225,6 +219,11 @@ kernel void scan_inclusive(global float * a,
 }
 )";
 
+void opencl_main(OpenCL& opencl) {
+    using namespace std::chrono;
+    print_column_names();
+    profile_filter(1024*1024, opencl);
+}
 
 int main() {
     try {
