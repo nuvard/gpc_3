@@ -78,7 +78,7 @@ void profile_filter(int n, OpenCL& opencl) {
     int group_size = 64;
     int scan_num = 0;
     cl::Buffer d_input(opencl.queue, begin(input), end(input), true);
-    cl::Buffer d_mask(opencl.context, CL_MEM_READ_WRITE, (n+group_size) * sizeof(int));
+    cl::Buffer d_mask(opencl.context, CL_MEM_READ_WRITE, (n + group_size) * sizeof(int));
     auto t2 = clock_type::now();
     map.setArg(0, d_input);
     map.setArg(1, d_mask);
