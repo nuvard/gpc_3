@@ -94,9 +94,9 @@ void profile_filter(int n, OpenCL& opencl) {
         arg++;
         buffers.emplace_back(opencl.context, CL_MEM_READ_WRITE, (size + buffer_size)*sizeof(int));
         buffer_sizes.push_back(size);
-        scan.setArg(2, buffers[arg]);
+        scan.setArg(1, buffers[arg]);
         //if (size < buffer_size) buffer_size = size;
-        scan.setArg(1, cl::Local(buffer_size*sizeof(int)));
+        scan.setArg(2, cl::Local(buffer_size*sizeof(int)));
         scan.setArg(3, size);
         scan.setArg(4, buffer_size);
         opencl.queue.enqueueNDRangeKernel(
@@ -142,15 +142,13 @@ void profile_filter(int n, OpenCL& opencl) {
     opencl.queue.flush();
 
     auto t4 = clock_type::now();
-    // TODO Implement OpenCL version! See profile_vector_times_vector for an example.
-    // TODO Uncomment the following line!
     verify_vector(expected_result, result);
     print("filter", {t1-t0,t4-t1,t2-t1,t3-t2,t4-t3});
 }
 
 const std::string src = R"(
-
-kernel void add_chunk_sum(
+kernel void
+scan_final(
     global int* data,
     global int* scan,
     int size,
@@ -164,30 +162,13 @@ kernel void add_chunk_sum(
     }
 }
 
-kernel void map_positive(
-    global float* data,
-    global int* result
-) {
-    int i = get_global_id(0);
-    result[i] = data[i] > 0 ? 1 : 0;
-}
-
-kernel void pack(
-    global float* a,
-    global int* mask,
-    global float* result
-) {
-    int i = get_global_id(0);
-    if (mask[i] < mask[i+1]) {
-        result[mask[i]] = a[i+1];
-    }
-}
-
-kernel void scan_inclusive(global int * data,
-                   local int * buffer,
-                   global int * result,
+kernel void
+scan_inclusive(global int* data,
+                   global int* result,
+                   local  int* buffer,
                    int size,
                    int buffer_size) {
+    // TODO: Implement OpenCL version.
     int local_id = get_local_id(0); // номер потока в группе
     int group_id = get_group_id(0);
     int global_id = get_global_id(0);
@@ -214,6 +195,27 @@ kernel void scan_inclusive(global int * data,
         result[group_id] = buffer[buffer_size-1];
     }
     barrier(CLK_GLOBAL_MEM_FENCE);
+}
+
+kernel void
+map_more_zero(
+    global float* data,
+    global int* result
+) {
+    int i = get_global_id(0);
+    result[i] = data[i] > 0 ? 1 : 0;
+}
+
+kernel void
+scatter(
+    global float* data,
+    global int* mask,
+    global float* result
+) {
+    int i = get_global_id(0);
+    if (mask[i] < mask[i+1]) {
+        result[mask[i]] = data[i+1];
+    }
 }
 )";
 
