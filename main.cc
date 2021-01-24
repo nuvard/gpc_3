@@ -77,7 +77,7 @@ void profile_filter(int n, OpenCL& opencl) {
     int group_size = 16;
     int scan_num = 0;
     cl::Buffer d_input(opencl.queue, begin(input), end(input), true);
-    cl::Buffer d_mask(opencl.context, CL_MEM_READ_WRITE, (n + group_size) * sizeof(int));
+    cl::Buffer d_mask(opencl.context, CL_MEM_READ_WRITE, (n+group_size) * sizeof(int));
     auto t2 = clock_type::now();
     map.setArg(0, d_input);
     map.setArg(1, d_mask);
@@ -88,25 +88,24 @@ void profile_filter(int n, OpenCL& opencl) {
             cl::NullRange
     );
     scans.push_back(d_mask);
-    for (int size = n; size > 1; size = (size+ group_size - 1)/ group_size) {
-        scan.setArg(0, scans[scan_num]);
+    for (int scan_size = n; scan_size > 1; scan_size = (scan_size + group_size - 1)/ group_size) {
         scan_num++;
-        scans.push_back(cl::Buffer(opencl.context, CL_MEM_READ_WRITE, (size + group_size)*sizeof(int)));
-        scan_sizes.push_back(size);
-        //if (size < buffer_size) buffer_size = size;
+        scans.push_back(cl::Buffer(opencl.context, CL_MEM_READ_WRITE, (scan_size+group_size)*sizeof(int)));
+        scan_sizes.push_back(scan_size);
+        scan.setArg(0, scans[scan_num-1]);
         scan.setArg(1, cl::Local(group_size*sizeof(int)));
         scan.setArg(2, scans[scan_num]);
-        scan.setArg(3, size);
+        scan.setArg(3, scan_size);
         scan.setArg(4, group_size);
         opencl.queue.enqueueNDRangeKernel(
                 scan,
                 cl::NullRange,
-                cl::NDRange(((size + group_size - 1)/ group_size) * group_size),
+                cl::NDRange(((scan_size + group_size - 1)/ group_size) * group_size),
                 cl::NDRange(group_size));
         opencl.queue.flush();
     }
 
-    for (int i = scan_num-1; i >= 1; i--) {
+    for (int i = scan_num - 1; i > 0; i-=1) {
         collect_scans.setArg(0, scans[i-1]);
         collect_scans.setArg(1, scans[i]);
         collect_scans.setArg(2, scan_sizes[i-1]);
@@ -114,7 +113,7 @@ void profile_filter(int n, OpenCL& opencl) {
         opencl.queue.enqueueNDRangeKernel(
                 collect_scans,
                 cl::NullRange,
-                cl::NDRange(((scan_sizes[i-1]+ group_size - 1)/ group_size) * group_size),
+                cl::NDRange(((scan_sizes[i-1]+group_size-1)/group_size)*group_size),
                 cl::NDRange(group_size)
         );
     }
@@ -158,9 +157,9 @@ kernel void add_chunk_sum(global int * a,
   }
 }
 
-kernel void scan_inclusive(global float * a,
-                           local float * b,
-                           global float * chunk_sums,
+kernel void scan_inclusive(global int * a,
+                           local int * b,
+                           global int * chunk_sums,
                            int current_size, // текущий размер массива (так как мы рекурсивно меняем размер сканского массива)
                            int group_size // размер группы
                            ) {
@@ -193,24 +192,22 @@ kernel void scan_inclusive(global float * a,
     barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
-//этот ок!
 kernel void is_positive(
     global float * a,
-    global int * result
+    global int * mask
 ) {
     int i = get_global_id(0);
-    if (a[i] > 0) { result[i] = 1; }
-    else { result[i] = 0; }
+    if (a[i] > 0) { mask[i] = 1; }
+    else { mask[i] = 0; }
 }
 
-//этот ок!
 kernel void scatter(
     global float * a,
     global int * mask,
     global float * result
 ) {
     int i = get_global_id(0);
-    if (mask[i] < mask[i+1]) {
+    if (mask[i+1] > mask[i]) {
         result[mask[i]] = a[i+1];
     }
 }
