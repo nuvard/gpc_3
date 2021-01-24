@@ -133,7 +133,8 @@ void profile_filter(int n, OpenCL& opencl) {
 
     auto t3 = clock_type::now();
     opencl.queue.enqueueReadBuffer(scans[0], true, 0, final_masks.size()*sizeof(int), final_masks.data());
-    int size = final_masks.back();
+
+    int size = final_masks.back(); //последний элемент - должен давать количестыо чисел больше нуля
     print("After masking: %i\n", size);
     result.resize(size);
     opencl.queue.enqueueReadBuffer(d_result, true, 0, n*sizeof(float), result.data());
@@ -176,37 +177,35 @@ kernel void pack(
     }
 }
 
-kernel void scan_inclusive(global float * a,
-                           local float * b,
-                           global float * chunk_sums,
-                           int current_size, // текущий размер массива (так как мы рекурсивно меняем размер сканского массива)
-                           int group_size // размер группы
-                           ) {
+scan_inclusive(global int * data,
+                   local int * buffer,
+                   global int * result,
+                   int size,
+                   int buffer_size) {
     int local_id = get_local_id(0); // номер потока в группе
-    int global_id = get_global_id(0);
     int group_id = get_group_id(0);
-
-    if (global_id < current_size){
-        b[local_id] = a[global_id];
-    }
-    else {
-        b[local_id] = 0.f;
-    }
+    int global_id = get_global_id(0);
+    if (global_id < size)
+        buffer[local_id] = data[global_id];
+    else
+        buffer[local_id] = 0;
     barrier(CLK_LOCAL_MEM_FENCE);
-    for (int offset = 1; offset < group_size; offset *= 2) {
-        if (local_id >= offset && global_id < current_size) {
-            b[local_id] += b[local_id - offset];
+    for(int offset=1; offset<buffer_size; offset *= 2) {
+        int sum = 0;
+        if (global_id < size && local_id >= offset) {
+            sum += buffer[local_id - offset];
+            buffer[local_id] += sum;
         }
         barrier(CLK_LOCAL_MEM_FENCE);
     }
     barrier(CLK_LOCAL_MEM_FENCE);
-    //сохраняю групповую сумму для дальнейших действий
-    if (global_id < current_size) {
-        a[global_id] = b[local_id];
+    if (global_id < size) {
+        data[global_id] = buffer[local_id];
     }
-    //сохраняю сумму
-    if (local_id == group_size - 1) {
-        chunk_sums[group_id] = b[group_size-1];
+
+    if (local_id == 0) {
+        //printf("%.3f val\n %d group_id\n%d size\n%d buffer_size\n\n", buffer[0], group_id, size, buffer_size);
+        result[group_id] = buffer[buffer_size-1];
     }
     barrier(CLK_GLOBAL_MEM_FENCE);
 }
