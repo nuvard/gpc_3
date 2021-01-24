@@ -102,7 +102,7 @@ void profile_filter(int n, OpenCL& opencl) {
         opencl.queue.enqueueNDRangeKernel(
                 kernel_scan,
                 cl::NullRange,
-                cl::NDRange(((scan_size + group_size - 1)/ group_size) * group_size),
+                cl::NDRange(((scan_size + group_size - 1) / group_size) * group_size),
                 cl::NDRange(group_size));
         opencl.queue.flush();
     }
@@ -121,7 +121,7 @@ void profile_filter(int n, OpenCL& opencl) {
     }
 
     //собираем результаты
-    cl::Buffer d_result(opencl.context, CL_MEM_READ_WRITE, (n)*sizeof(int));
+    cl::Buffer d_result(opencl.context, CL_MEM_READ_WRITE, (n)*sizeof(float));
     std::vector<int> final_masks(n);
     kernel_pack.setArg(0, d_input);
     kernel_pack.setArg(1, scans[0]);
@@ -134,7 +134,7 @@ void profile_filter(int n, OpenCL& opencl) {
     opencl.queue.enqueueReadBuffer(scans[0], true, 0, final_masks.size()*sizeof(int), final_masks.data());
 
     int size = final_masks.back(); //последний элемент - должен давать количестыо чисел больше нуля
-    //print("After masking: %i\n", size);
+    print("After masking: %i\n", size);
     result.resize(size);
     opencl.queue.enqueueReadBuffer(d_result, true, 0, n*sizeof(float), result.data());
     opencl.queue.flush();
@@ -168,13 +168,13 @@ kernel void map_positive(
 }
 
 kernel void pack(
-    global float* data,
+    global float* a,
     global int* mask,
     global float* result
 ) {
     int i = get_global_id(0);
     if (mask[i] < mask[i+1]) {
-        result[mask[i]] = data[i+1];
+        result[mask[i]] = a[i+1];
     }
 }
 
