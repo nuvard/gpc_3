@@ -147,7 +147,7 @@ void profile_filter(int n, OpenCL& opencl) {
 }
 
 const std::string src = R"(
-
+///этот ок!
 kernel void add_chunk_sum(global int * a,
                           global int * chunk_sums,
                           int current_size,
@@ -194,13 +194,16 @@ scan_inclusive(global int* data,
     barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
-kernel void
-map_more_zero(
-    global float* data,
-    global int* result
+kernel void is_positive(
+    global float* a,
+    global int * result //так как дальше в маску
 ) {
     int i = get_global_id(0);
-    result[i] = data[i] > 0 ? 1 : 0;
+    if (a[i] > 0) {
+        result[i] = 1;
+    }
+    else result[i]= 0;
+   // result[i] = data[i] > 0 ? 1 : 0;
 }
 
 kernel void
