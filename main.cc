@@ -63,9 +63,9 @@ struct OpenCL {
 
 void profile_filter(int n, OpenCL& opencl) {
     auto input = random_std_vector<float>(n);
-    std::vector<float> result, expected_result(n);
-    //expected_result.reserve(n);
-
+    std::vector<float> result, expected_result;
+    result.reserve(n);
+    printf("initial size is: %i \n", n);
     cl::Kernel kernel_scan(opencl.program, "scan_inclusive");
     cl::Kernel kernel_sum(opencl.program, "add_chunk_sum");
     cl::Kernel kernel_map(opencl.program, "map_positive");
@@ -79,9 +79,10 @@ void profile_filter(int n, OpenCL& opencl) {
 
     auto t0 = clock_type::now();
     filter(input, expected_result, [] (float x) { return x > 0; }); // filter positive numbers
+    printf("filtered %i items \n", expected_result);
     auto t1 = clock_type::now();
     cl::Buffer d_input(opencl.queue, begin(input), end(input), true);
-    cl::Buffer d_mask(opencl.context, CL_MEM_READ_WRITE, (n+group_size)*sizeof(int)); // n+group_size чтобы сработал первый цикл сканса
+    cl::Buffer d_mask(opencl.context, CL_MEM_READ_WRITE, (n + group_size)*sizeof(int)); // n+group_size чтобы сработал первый цикл сканса
     auto t2 = clock_type::now();
     //первое - просто строим маску позитивности
     kernel_map.setArg(0, d_input);
@@ -131,7 +132,7 @@ void profile_filter(int n, OpenCL& opencl) {
 
     auto t3 = clock_type::now();
     opencl.queue.enqueueReadBuffer(scans[0], true, 0, final_masks.size()*sizeof(int), final_masks.data());
-    int size = final_masks.size();
+    int size = fin_masks.back();
     result.resize(size);
     opencl.queue.enqueueReadBuffer(d_result, true, 0, n*sizeof(float), result.data());
     opencl.queue.flush();
